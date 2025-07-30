@@ -375,7 +375,8 @@ const DashboardPage = () => {
                 const snapshot = await db.collection('properties').orderBy('publicationDate', 'desc').get();
                 setProperties(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             } catch (error) {
-                toast('Error al cargar los inmuebles', 'error');
+                console.error("Error fetching properties: ", error);
+                toast('Error al cargar los inmuebles. Revisa la consola.', 'error');
             } finally {
                 setLoading(false);
             }
@@ -521,13 +522,13 @@ const PropertyFormPage = ({ params }) => {
                 await db.collection('properties').doc(propertyId).update(dataToSave);
                 toast('Inmueble actualizado con éxito', 'success');
             } else {
-                const finalPropertyId = db.collection('properties').doc().id;
-                await db.collection('properties').doc(finalPropertyId).set({ ...dataToSave, publicationDate: new Date().toISOString() });
+                // Use .add() for creating new documents for cleaner code
+                await db.collection('properties').add({ ...dataToSave, publicationDate: new Date().toISOString() });
                 toast('Inmueble creado con éxito', 'success');
             }
             navigate('/');
         } catch (error) {
-            console.error(error);
+            console.error("Error saving property:", error);
             toast('Error al guardar el inmueble. Revisa la consola para más detalles.', 'error');
         } finally {
             setIsSubmitting(false);

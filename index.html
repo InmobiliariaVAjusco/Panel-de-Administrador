@@ -1,10 +1,11 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Inmuebles V - Admin Panel</title>
+    <title>Panel de Admin | Inmuebles V</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23059669'><path d='M10 4L12 2L14 4H17C18.11 4 19 4.9 19 6V11H17V8H7V11H5V6C5 4.9 5.89 4 7 4H10M20 12C20 11.45 19.55 11 19 11H5C4.45 11 4 11.45 4 12V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V12Z' /></svg>">
+    <link rel="preload" as="image" href="https://res.cloudinary.com/dcm5pug0v/image/upload/v1753909863/cdd2c29ae067f10e2b5d03787f7f4c44_v5hp5j.jpg">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Modern Scrollbar Styling */
@@ -43,11 +44,18 @@
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes zoomIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
         .animate-fade-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
         .animate-fade-in-up {
             animation: fadeInUp 0.4s ease-out forwards;
+        }
+        .animate-zoom-in {
+            animation: zoomIn 0.5s ease-out forwards;
         }
     </style>
 <script type="importmap">

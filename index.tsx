@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, createContext, useContext, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 
 declare const firebase: any;
@@ -47,6 +47,12 @@ interface Property {
   rooms?: number;
   bathrooms?: number;
   services?: string[];
+}
+
+interface ImageSource {
+    id: string;
+    url: string;
+    file?: File;
 }
 
 // =================================================================================
@@ -123,30 +129,49 @@ const PropertyForm = ({ propertyToEdit, onFormSubmit, onCancel }) => {
         category: 'Casa',
         mainFeatures: ['', '', ''],
         description: '',
-        images: [] as string[],
         isFeatured: false,
         frontage: '', depth: '', rooms: '', bathrooms: '',
         services: [] as string[],
     });
-    const [imageFiles, setImageFiles] = useState<File[]>([]);
+    const [imageSources, setImageSources] = useState<ImageSource[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    
+    const dragItem = useRef<number | null>(null);
+    const dragOverItem = useRef<number | null>(null);
 
     const CATEGORY_OPTIONS = ['Casa', 'Departamento', 'Terreno', 'Rancho', 'Casa en condominio', 'Casa con terreno', 'Comercial', 'Mixto'];
 
     useEffect(() => {
         if (propertyToEdit) {
             setFormData({
-                ...propertyToEdit,
+                address: propertyToEdit.address || '',
                 price: String(propertyToEdit.price || ''),
                 sqft: String(propertyToEdit.sqft || ''),
+                listingType: propertyToEdit.listingType || 'Venta',
+                category: propertyToEdit.category || 'Casa',
+                mainFeatures: propertyToEdit.mainFeatures || ['', '', ''],
+                description: propertyToEdit.description || '',
+                isFeatured: propertyToEdit.isFeatured || false,
                 frontage: String(propertyToEdit.frontage || ''),
                 depth: String(propertyToEdit.depth || ''),
                 rooms: String(propertyToEdit.rooms || ''),
                 bathrooms: String(propertyToEdit.bathrooms || ''),
-                mainFeatures: propertyToEdit.mainFeatures || ['', '', ''],
                 services: propertyToEdit.services || [],
             });
+            const initialSources = (propertyToEdit.images || []).map((url, index) => ({
+                id: `existing-${index}-${url.slice(-10)}`,
+                url: url,
+            }));
+            setImageSources(initialSources);
         }
+        
+        return () => {
+            imageSources.forEach(source => {
+                if (source.file) { // Only revoke blob URLs
+                    URL.revokeObjectURL(source.url);
+                }
+            });
+        };
     }, [propertyToEdit]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -175,42 +200,67 @@ const PropertyForm = ({ propertyToEdit, onFormSubmit, onCancel }) => {
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            setImageFiles(Array.from(e.target.files));
+            const files = Array.from(e.target.files);
+            const newSources: ImageSource[] = files.map(file => ({
+                id: `new-${Date.now()}-${file.name}`,
+                url: URL.createObjectURL(file),
+                file: file
+            }));
+            setImageSources(prev => [...prev, ...newSources]);
+            e.target.value = ''; // Reset file input to allow selecting the same file again
         }
     };
     
+    const handleRemoveImage = (idToRemove: string) => {
+        setImageSources(prev => {
+            const sourceToRemove = prev.find(s => s.id === idToRemove);
+            if (sourceToRemove?.file) {
+                URL.revokeObjectURL(sourceToRemove.url);
+            }
+            return prev.filter(s => s.id !== idToRemove);
+        });
+    };
+    
+    const handleDragSort = () => {
+        if (dragItem.current === null || dragOverItem.current === null) return;
+        const sourcesCopy = [...imageSources];
+        const draggedItemContent = sourcesCopy.splice(dragItem.current, 1)[0];
+        sourcesCopy.splice(dragOverItem.current, 0, draggedItemContent);
+        dragItem.current = null;
+        dragOverItem.current = null;
+        setImageSources(sourcesCopy);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
 
         try {
-            const imageUrls = await Promise.all(imageFiles.map(uploadToCloudinary));
-            const finalImages = propertyToEdit ? [...formData.images, ...imageUrls] : imageUrls;
+            const finalImageUrls = await Promise.all(
+                imageSources.map(source => {
+                    if (source.file) {
+                        return uploadToCloudinary(source.file);
+                    }
+                    return Promise.resolve(source.url);
+                })
+            );
             
             const propertyData: any = {
-                address: formData.address,
+                ...formData,
                 price: parseFloat(formData.price),
                 sqft: parseFloat(formData.sqft),
-                listingType: formData.listingType,
-                category: formData.category,
-                mainFeatures: formData.mainFeatures,
-                description: formData.description,
-                images: finalImages,
-                isFeatured: formData.isFeatured,
-                services: formData.services,
+                images: finalImageUrls,
             };
 
-            // Add optional numeric fields only if they have a value
             if (formData.frontage) propertyData.frontage = parseFloat(formData.frontage);
             if (formData.depth) propertyData.depth = parseFloat(formData.depth);
             if (formData.rooms) propertyData.rooms = parseInt(formData.rooms, 10);
             if (formData.bathrooms) propertyData.bathrooms = parseInt(formData.bathrooms, 10);
 
-            // Add publication date for new properties
             if (!propertyToEdit) {
                 propertyData.publicationDate = new Date().toISOString();
             } else {
-                propertyData.publicationDate = propertyToEdit.publicationDate; // Preserve original date
+                propertyData.publicationDate = propertyToEdit.publicationDate;
             }
             
             onFormSubmit(propertyData);
@@ -262,7 +312,7 @@ const PropertyForm = ({ propertyToEdit, onFormSubmit, onCancel }) => {
             <div>
                 <label className="block text-sm font-medium text-stone-600 mb-2">Servicios (Opcional)</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {['Agua', 'Luz', 'Drenaje', 'Pavimento', 'Teléfono', 'Internet', 'Facilidades de pago'].map(service => (
+                    {['Agua', 'Luz', 'Drenaje', 'Pavimento', 'Teléfono', 'Internet'].map(service => (
                         <label key={service} className="flex items-center space-x-2">
                             <input type="checkbox" value={service} checked={formData.services.includes(service)} onChange={handleServiceChange} className="rounded text-emerald-600 focus:ring-emerald-500" />
                             <span>{service}</span>
@@ -273,6 +323,24 @@ const PropertyForm = ({ propertyToEdit, onFormSubmit, onCancel }) => {
              
              <div>
                 <label className="block text-sm font-medium text-stone-600 mb-2">Imágenes</label>
+                <p className="text-xs text-stone-500 mb-2">Arrastra las imágenes para reordenarlas. La primera será la imagen principal.</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4 mb-4">
+                    {imageSources.map((source, index) => (
+                         <div
+                            key={source.id}
+                            draggable
+                            onDragStart={() => (dragItem.current = index)}
+                            onDragEnter={() => (dragOverItem.current = index)}
+                            onDragEnd={handleDragSort}
+                            onDragOver={(e) => e.preventDefault()}
+                            className="relative aspect-square border-2 border-dashed rounded-lg flex items-center justify-center cursor-move group bg-stone-100"
+                        >
+                            <img src={source.url} alt="Preview" className="w-full h-full object-cover rounded-md"/>
+                            <button type="button" onClick={() => handleRemoveImage(source.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-700">&times;</button>
+                            {index === 0 && <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs text-center py-0.5 rounded-b-md">Principal</div>}
+                        </div>
+                    ))}
+                </div>
                 <input type="file" multiple onChange={handleImageChange} className="w-full text-sm text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
             </div>
 
@@ -340,7 +408,7 @@ const Dashboard = () => {
         if (page === 'form') {
             return <PropertyForm propertyToEdit={propertyToEdit} onFormSubmit={handleFormSubmit} onCancel={() => setPage('dashboard')} />;
         }
-        
+
         return (
             <div className="animate-fade-in">
                  <h1 className="text-3xl font-bold text-stone-800 mb-6">Propiedades</h1>
@@ -349,16 +417,16 @@ const Dashboard = () => {
                         {loading ? <li className="p-4 text-center">Cargando...</li> :
                          properties.map(prop => (
                             <li key={prop.id} className="p-4 flex items-center justify-between hover:bg-stone-50">
-                                <div className="flex-1">
-                                    <p className="font-semibold text-stone-800">{prop.address}</p>
-                                    <div className="text-sm text-stone-500 flex items-center gap-x-3">
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-stone-800 truncate">{prop.address}</p>
+                                    <div className="text-sm text-stone-500 flex items-center gap-x-3 mt-1 flex-wrap">
                                       <span className="font-medium text-emerald-600">${(prop.price || 0).toLocaleString()}</span>
                                       <span className="bg-stone-200 px-2 py-0.5 rounded-full text-xs">{prop.listingType}</span>
                                       <span className="bg-stone-200 px-2 py-0.5 rounded-full text-xs">{prop.category}</span>
                                       {prop.isFeatured && <span className="bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-semibold">Destacada</span>}
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 ml-4">
                                     <button onClick={() => handleEditProperty(prop)} className="p-2 text-stone-500 hover:text-emerald-600"><Icon path={ICONS.PENCIL} /></button>
                                     <button onClick={() => handleDeleteProperty(prop.id)} className="p-2 text-stone-500 hover:text-red-600"><Icon path={ICONS.TRASH} /></button>
                                 </div>
@@ -423,7 +491,7 @@ const LoginScreen = () => {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const backgroundImageUrl = "https://res.cloudinary.com/dcm5pug0v/image/upload/v1753909863/cdd2c29ae067f10e2b5d03787f7f4c44_v5hp5j.jpg";
+    const backgroundImageUrl = "https://res.cloudinary.com/dcm5pug0v/image/upload/v1753922572/8944aae38e7675be7b918a8e0ac2a5db_unrmac.gif";
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -445,14 +513,14 @@ const LoginScreen = () => {
             style={{ backgroundImage: `url(${backgroundImageUrl})` }}
         >
             <div className="min-h-screen flex items-center justify-center p-4 bg-black/50 animate-fade-in">
-                <div className="max-w-md w-full bg-stone-200/95 backdrop-blur-sm p-8 rounded-2xl shadow-2xl animate-fade-in-up">
+                <div className="max-w-sm w-full bg-stone-200/95 backdrop-blur-sm p-6 rounded-2xl shadow-2xl animate-fade-in-up">
                     <div className="text-center mb-6">
                         <img 
                             src={LOGO_URL} 
                             alt="Logo Inmobiliaria" 
-                            className="mx-auto h-40 w-auto mb-2 animate-zoom-in"
+                            className="mx-auto h-24 w-auto mb-2 animate-zoom-in"
                         />
-                        <h1 className="text-3xl font-bold text-stone-900">Panel de Administrador</h1>
+                        <h1 className="text-3xl font-bold text-stone-900">Bienvenido</h1>
                         <p className="text-stone-600 mt-2">Inicia sesión para continuar</p>
                     </div>
                     <form onSubmit={handleLogin}>
@@ -465,7 +533,7 @@ const LoginScreen = () => {
                                 required
                             />
                         </div>
-                        <div className="mb-6">
+                        <div className="mb-4">
                            <label htmlFor="password" className="block text-sm font-medium text-stone-700 mb-1">Contraseña</label>
                            <div className="relative">
                                <input
@@ -484,7 +552,7 @@ const LoginScreen = () => {
                                </button>
                            </div>
                         </div>
-                        <button type="submit" disabled={isLoading} className="w-full bg-emerald-600 text-white font-bold py-3 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:bg-emerald-400 transition-colors duration-300">
+                        <button type="submit" disabled={isLoading} className="w-full mt-6 bg-emerald-600 text-white font-bold py-2 px-4 rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:bg-emerald-400 transition-colors duration-300">
                             {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
                         </button>
                     </form>

@@ -7,7 +7,7 @@ declare const firebase: any;
 // Cloudinary Configuration
 const CLOUDINARY_CLOUD_NAME = 'dcm5pug0v';
 const CLOUDINARY_UPLOAD_PRESET = 'Inmuebles_Upload';
-const LOGO_URL = "https://res.cloudinary.com/dcm5pug0v/image/upload/v1753909938/505390648_122139922838632722_2166154781793358623_n-removebg-preview_usoh8t.png";
+const LOGO_URL = "https://res.cloudinary.com/dcm5pug0v/image/upload/v1753987097/Inmobiliaria_V_logo_2-removebg-preview_vfth4r.png";
 
 // =================================================================================
 // 0. FIREBASE CONFIGURATION
@@ -29,6 +29,7 @@ const db = firebase.firestore();
 // 1. TYPE DEFINITIONS
 // =================================================================================
 type Page = 'dashboard' | 'form';
+type PropertyStatus = 'Disponible' | 'Vendida' | 'Rentada';
 
 interface Property {
   id: string;
@@ -42,6 +43,7 @@ interface Property {
   images: string[];
   isFeatured: boolean;
   publicationDate: string;
+  status: PropertyStatus;
   frontage?: number;
   depth?: number;
   rooms?: number;
@@ -66,6 +68,7 @@ const ICONS = {
     PENCIL: "M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828zM5 14H3v2h2v-2zM5 10H3v2h2v-2zM5 6H3v2h2V6zm4-4h2v2h-2V2zM3 4c0-1.1.9-2 2-2h2v2H5v2H3V4z",
     LOGOUT: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
     X: "M6 18L18 6M6 6l12 12",
+    PHOTO: "M5 5a2 2 0 00-2 2v8a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2H5zm11 10H4V7a1 1 0 011-1h10a1 1 0 011 1v8zM8 11a1 1 0 100-2 1 1 0 000 2z",
 };
 
 // =================================================================================
@@ -119,6 +122,15 @@ const uploadToCloudinary = async (file: File) => {
     return data.secure_url;
 };
 
+function usePrevious(value) {
+  const ref = useRef(undefined);
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref.current;
+}
+
+
 // =================================================================================
 // 5. PROPERTY FORM COMPONENT
 // =================================================================================
@@ -127,6 +139,7 @@ const PropertyForm = ({ propertyToEdit, onFormSubmit, onCancel }) => {
         address: '', price: '', sqft: '',
         listingType: 'Venta' as 'Venta' | 'Renta',
         category: 'Casa',
+        status: 'Disponible' as PropertyStatus,
         mainFeatures: ['', '', ''],
         description: '',
         isFeatured: false,
@@ -149,6 +162,7 @@ const PropertyForm = ({ propertyToEdit, onFormSubmit, onCancel }) => {
                 sqft: String(propertyToEdit.sqft || ''),
                 listingType: propertyToEdit.listingType || 'Venta',
                 category: propertyToEdit.category || 'Casa',
+                status: propertyToEdit.status || 'Disponible',
                 mainFeatures: propertyToEdit.mainFeatures || ['', '', ''],
                 description: propertyToEdit.description || '',
                 isFeatured: propertyToEdit.isFeatured || false,
@@ -288,8 +302,14 @@ const PropertyForm = ({ propertyToEdit, onFormSubmit, onCancel }) => {
                     <option value="Renta">Renta</option>
                 </select>
                 
-                <select name="category" value={formData.category} onChange={handleChange} className="w-full px-4 py-2 border border-stone-300 rounded-md lg:col-span-2" required>
+                <select name="category" value={formData.category} onChange={handleChange} className="w-full px-4 py-2 border border-stone-300 rounded-md" required>
                     {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+
+                <select name="status" value={formData.status} onChange={handleChange} className="w-full px-4 py-2 border border-stone-300 rounded-md" required>
+                    <option value="Disponible">Disponible</option>
+                    <option value="Vendida">Vendida</option>
+                    <option value="Rentada">Rentada</option>
                 </select>
 
                 <input name="frontage" type="number" value={formData.frontage} onChange={handleChange} placeholder="Frente (m) (Opcional)" className="w-full px-4 py-2 border border-stone-300 rounded-md" />
@@ -369,6 +389,12 @@ const Dashboard = () => {
     const [propertyToEdit, setPropertyToEdit] = useState<Property | null>(null);
     const [loading, setLoading] = useState(true);
 
+    const STATUS_STYLES: Record<PropertyStatus, string> = {
+        Disponible: 'bg-green-100 text-green-800',
+        Vendida: 'bg-red-100 text-red-800',
+        Rentada: 'bg-blue-100 text-blue-800',
+    };
+
     useEffect(() => {
         const unsubscribe = db.collection('properties').orderBy('publicationDate', 'desc').onSnapshot((snapshot: any) => {
             const props = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
@@ -416,19 +442,33 @@ const Dashboard = () => {
                     <ul className="divide-y divide-stone-200">
                         {loading ? <li className="p-4 text-center">Cargando...</li> :
                          properties.map(prop => (
-                            <li key={prop.id} className="p-4 flex items-center justify-between hover:bg-stone-50">
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-stone-800 truncate">{prop.address}</p>
-                                    <div className="text-sm text-stone-500 flex items-center gap-x-3 mt-1 flex-wrap">
-                                      <span className="font-medium text-emerald-600">${(prop.price || 0).toLocaleString()}</span>
-                                      <span className="bg-stone-200 px-2 py-0.5 rounded-full text-xs">{prop.listingType}</span>
-                                      <span className="bg-stone-200 px-2 py-0.5 rounded-full text-xs">{prop.category}</span>
-                                      {prop.isFeatured && <span className="bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-semibold">Destacada</span>}
+                            <li key={prop.id} className={`p-4 flex items-center justify-between hover:bg-stone-50 transition-colors duration-150 ${prop.status !== 'Disponible' ? 'opacity-70' : ''}`}>
+                                <div className="flex items-center flex-1 min-w-0">
+                                    {prop.images && prop.images[0] ? (
+                                        <img
+                                            src={prop.images[0]}
+                                            alt={prop.address}
+                                            className="w-28 h-20 object-cover rounded-md mr-4 flex-shrink-0 bg-stone-200"
+                                        />
+                                    ) : (
+                                        <div className="w-28 h-20 bg-stone-200 rounded-md mr-4 flex-shrink-0 flex items-center justify-center">
+                                            <Icon path={ICONS.PHOTO} className="w-8 h-8 text-stone-400" />
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-semibold text-stone-800 truncate" title={prop.address}>{prop.address}</p>
+                                        <div className="text-sm text-stone-500 flex items-center gap-x-3 mt-1 flex-wrap">
+                                          <span className="font-medium text-emerald-600">${(prop.price || 0).toLocaleString()}</span>
+                                          {prop.status && <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[prop.status] || 'bg-stone-200'}`}>{prop.status}</span>}
+                                          <span className="bg-stone-200 px-2 py-0.5 rounded-full text-xs">{prop.listingType}</span>
+                                          <span className="bg-stone-200 px-2 py-0.5 rounded-full text-xs">{prop.category}</span>
+                                          {prop.isFeatured && <span className="bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-semibold">Destacada</span>}
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-2 ml-4">
-                                    <button onClick={() => handleEditProperty(prop)} className="p-2 text-stone-500 hover:text-emerald-600"><Icon path={ICONS.PENCIL} /></button>
-                                    <button onClick={() => handleDeleteProperty(prop.id)} className="p-2 text-stone-500 hover:text-red-600"><Icon path={ICONS.TRASH} /></button>
+                                <div className="flex gap-2 ml-4 flex-shrink-0">
+                                    <button onClick={() => handleEditProperty(prop)} className="p-2 text-stone-500 hover:text-emerald-600 rounded-full hover:bg-stone-100 transition-colors duration-150"><Icon path={ICONS.PENCIL} /></button>
+                                    <button onClick={() => handleDeleteProperty(prop.id)} className="p-2 text-stone-500 hover:text-red-600 rounded-full hover:bg-stone-100 transition-colors duration-150"><Icon path={ICONS.TRASH} /></button>
                                 </div>
                             </li>
                         ))}
@@ -454,6 +494,7 @@ const Dashboard = () => {
                     </button>
                 </nav>
                 <div className="p-4 border-t border-stone-200">
+                     <p className="text-sm text-stone-500 text-center mb-2">Bienvenido a tu panel</p>
                      <button onClick={() => auth.signOut()} className="w-full flex items-center gap-3 px-4 py-2 rounded-md text-stone-600 hover:bg-stone-100">
                         <Icon path={ICONS.LOGOUT} /><span>Cerrar Sesión</span>
                     </button>
@@ -485,7 +526,7 @@ const EyeOffIcon = () => (
     </svg>
 );
 
-const LoginScreen = () => {
+const LoginScreen = ({ isExiting = false }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -502,7 +543,6 @@ const LoginScreen = () => {
         } catch (err: any) {
             setError('Credenciales incorrectas. Por favor, inténtalo de nuevo.');
             console.error(err);
-        } finally {
             setIsLoading(false);
         }
     };
@@ -513,12 +553,12 @@ const LoginScreen = () => {
             style={{ backgroundImage: `url(${backgroundImageUrl})` }}
         >
             <div className="min-h-screen flex items-center justify-center p-4 bg-black/50 animate-fade-in">
-                <div className="max-w-sm w-full bg-stone-200/95 backdrop-blur-sm p-6 rounded-2xl shadow-2xl animate-fade-in-up">
+                <div className={`max-w-sm w-full bg-stone-200/95 backdrop-blur-sm p-6 rounded-2xl shadow-2xl ${isExiting ? 'animate-form-exit' : 'animate-fade-in-up'}`}>
                     <div className="text-center mb-6">
                         <img 
                             src={LOGO_URL} 
                             alt="Logo Inmobiliaria" 
-                            className="mx-auto h-24 w-auto mb-2 animate-zoom-in"
+                            className={`mx-auto h-24 w-auto mb-2 ${isExiting ? 'animate-logo-exit' : 'animate-zoom-in'}`}
                         />
                         <h1 className="text-3xl font-bold text-stone-900">Bienvenido</h1>
                         <p className="text-stone-600 mt-2">Inicia sesión para continuar</p>
@@ -568,8 +608,36 @@ const LoginScreen = () => {
 // =================================================================================
 const App = () => {
     const authContext = useAuth();
-    return authContext?.user ? <Dashboard /> : <LoginScreen />;
+    const [renderState, setRenderState] = useState<'login' | 'transitioning' | 'dashboard'>('login');
+    const prevUser = usePrevious(authContext?.user);
+
+    useEffect(() => {
+        if (!authContext) return;
+
+        if (!prevUser && authContext.user) { // User just logged in
+            setRenderState('transitioning');
+            setTimeout(() => {
+                setRenderState('dashboard');
+            }, 1200); // Must match animation duration
+        } else if (prevUser && !authContext.user) { // User just logged out
+            setRenderState('login');
+        } else if (!authContext.user && !authContext.loading) { // Initial state, not logged in
+             setRenderState('login');
+        } else if (authContext.user && !authContext.loading) { // Initial state, already logged in
+             setRenderState('dashboard');
+        }
+
+    }, [authContext?.user, authContext?.loading, prevUser]);
+
+    if (renderState === 'dashboard') {
+        return <Dashboard />;
+    }
+    if (renderState === 'transitioning') {
+        return <LoginScreen isExiting={true} />;
+    }
+    return <LoginScreen />;
 };
+
 
 // =================================================================================
 // 9. RENDER APP

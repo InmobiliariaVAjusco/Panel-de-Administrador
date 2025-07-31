@@ -48,6 +48,15 @@
             from { opacity: 0; transform: scale(0.9); }
             to { opacity: 1; transform: scale(1); }
         }
+        @keyframes logoZoomInToFill {
+            from { transform: scale(1); }
+            to { transform: scale(50); opacity: 0; }
+        }
+        @keyframes formFadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
         .animate-fade-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
@@ -56,6 +65,12 @@
         }
         .animate-zoom-in {
             animation: zoomIn 0.5s ease-out forwards;
+        }
+        .animate-logo-exit {
+            animation: logoZoomInToFill 1.2s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+        }
+        .animate-form-exit {
+            animation: formFadeOut 0.5s ease-out forwards;
         }
     </style>
 <script type="importmap">

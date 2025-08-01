@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, createContext, useContext, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 
@@ -24,6 +23,13 @@ const firebaseConfig = {
 const app = firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+// =================================================================================
+// 0.1. ADMIN CONFIGURATION
+// =================================================================================
+// IMPORTANTE: Agrega el UID de Firebase de cada administrador aquí.
+// Para encontrar el UID de un usuario: Ve a la Consola de Firebase -> Authentication -> Pestaña de Usuarios.
+const ADMIN_UIDS = ['MAfXgmXMj8PlqWco6Gl06saZx1y1'];
 
 // =================================================================================
 // 1. TYPE DEFINITIONS
@@ -526,13 +532,19 @@ const EyeOffIcon = () => (
     </svg>
 );
 
-const LoginScreen = ({ isExiting = false }) => {
+const LoginScreen = ({ isExiting = false, initialError = '' }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const backgroundImageUrl = "https://res.cloudinary.com/dcm5pug0v/image/upload/v1753922572/8944aae38e7675be7b918a8e0ac2a5db_unrmac.gif";
+
+    useEffect(() => {
+        if (initialError) {
+            setError(initialError);
+        }
+    }, [initialError]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -568,7 +580,7 @@ const LoginScreen = ({ isExiting = false }) => {
                         <div className="mb-4">
                             <label htmlFor="email" className="block text-sm font-medium text-stone-700 mb-1">Email</label>
                             <input
-                                type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                                type="email" id="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(''); }}
                                 className="w-full px-4 py-2 border border-stone-300 rounded-md bg-stone-100/80 text-stone-900 placeholder:text-stone-500 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white transition"
                                 required
                             />
@@ -578,7 +590,7 @@ const LoginScreen = ({ isExiting = false }) => {
                            <div className="relative">
                                <input
                                    type={showPassword ? 'text' : 'password'}
-                                   id="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                                   id="password" value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }}
                                    className="w-full px-4 py-2 border border-stone-300 rounded-md bg-stone-100/80 text-stone-900 placeholder:text-stone-500 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white transition pr-10"
                                    required
                                />
@@ -609,22 +621,31 @@ const LoginScreen = ({ isExiting = false }) => {
 const App = () => {
     const authContext = useAuth();
     const [renderState, setRenderState] = useState<'login' | 'transitioning' | 'dashboard'>('login');
+    const [authError, setAuthError] = useState('');
     const prevUser = usePrevious(authContext?.user);
 
     useEffect(() => {
         if (!authContext) return;
 
+        const handleAuthCheck = (user: any) => {
+            if (ADMIN_UIDS.includes(user.uid)) {
+                setAuthError('');
+                setRenderState('transitioning');
+                setTimeout(() => setRenderState('dashboard'), 1200);
+            } else {
+                setAuthError('Acceso denegado. Esta cuenta no tiene permisos de administrador.');
+                auth.signOut();
+            }
+        };
+
         if (!prevUser && authContext.user) { // User just logged in
-            setRenderState('transitioning');
-            setTimeout(() => {
-                setRenderState('dashboard');
-            }, 1200); // Must match animation duration
+            handleAuthCheck(authContext.user);
         } else if (prevUser && !authContext.user) { // User just logged out
             setRenderState('login');
         } else if (!authContext.user && !authContext.loading) { // Initial state, not logged in
              setRenderState('login');
         } else if (authContext.user && !authContext.loading) { // Initial state, already logged in
-             setRenderState('dashboard');
+             handleAuthCheck(authContext.user);
         }
 
     }, [authContext?.user, authContext?.loading, prevUser]);
@@ -633,9 +654,9 @@ const App = () => {
         return <Dashboard />;
     }
     if (renderState === 'transitioning') {
-        return <LoginScreen isExiting={true} />;
+        return <LoginScreen isExiting={true} initialError={authError} />;
     }
-    return <LoginScreen />;
+    return <LoginScreen initialError={authError} />;
 };
 
 

@@ -29,7 +29,7 @@ const db = firebase.firestore();
 // =================================================================================
 // IMPORTANTE: Agrega el UID de Firebase de cada administrador aquí.
 // Para encontrar el UID de un usuario: Ve a la Consola de Firebase -> Authentication -> Pestaña de Usuarios.
-const ADMIN_UIDS = ['vLwVpo2gYKSRh9MXPJdmgTfvbEt22'];
+const ADMIN_UIDS = ['vLwVpo2gYKSRh9MXPJdmgTfvbEt2'];
 
 // =================================================================================
 // 1. TYPE DEFINITIONS

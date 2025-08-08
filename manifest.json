@@ -1,0 +1,23 @@
+{
+  "short_name": "Admin V",
+  "name": "Panel de Admin | Inmuebles V",
+  "description": "Panel de administración para propiedades de Inmuebles V.",
+  "icons": [
+    {
+      "src": "https://res.cloudinary.com/dcm5pug0v/image/upload/c_pad,b_auto,w_192,h_192/v1753987097/Inmobiliaria_V_logo_2-removebg-preview_vfth4r.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://res.cloudinary.com/dcm5pug0v/image/upload/c_pad,b_auto,w_512,h_512/v1753987097/Inmobiliaria_V_logo_2-removebg-preview_vfth4r.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#059669",
+  "background_color": "#fafaf9"
+}
